@@ -3,6 +3,7 @@
 This document contains independent QA analysis and bug reporting for the commercial title "Duet Night Abyss". These reports demonstrate black-box testing methodologies, edge-case identification, and root-cause hypothesis generation on complex, live-environment game systems.
 
 ---
+--- 
 
 ## 🐞 BUG-DNA-001: [Character/State Machine] "Truffle and Filbert" ultimate mount state fails to reset upon dungeon exit, breaking open-world locomotion
 
@@ -87,3 +88,5 @@ This appears to be an Asynchronous Loading / Race Condition issue.
 * In open-world games, visual meshes (graphics) and logic data (UI/Scripts) are often streamed separately to save memory.
 * It is highly probable that the streaming volume for the Fuxing Port story state loaded the visual models, but the event listener responsible for binding the NPC's GUID to the dialogue database timed out or failed to trigger.
 * **Thus:** The game knows "draw a character model here," but the character model doesn't know "who it is" or "what quest it belongs to," resulting in a lack of interaction colliders and UI elements.
+
+
