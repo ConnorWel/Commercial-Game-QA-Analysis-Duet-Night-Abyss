@@ -1,124 +1,89 @@
 # Commercial-Game-QA-Analysis-Duet-Night-Abyss
+
 This document contains independent QA analysis and bug reporting for the commercial title "Duet Night Abyss". These reports demonstrate black-box testing methodologies, edge-case identification, and root-cause hypothesis generation on complex, live-environment game systems.
 
-BUG-DNA-001: [Character/State Machine] "Truffle and Filbert" ultimate mount state fails to reset upon dungeon exit, breaking open-world locomotion
+---
 
-Reporter: [Connor Wei]
-Date: 2026-06-21 (Updated: 2026-06-22)
-Environment/Version: Duet Night Abyss (Current Live/Beta Build)
-Module: Character State Machine / Locomotion / Scene Transition
+## 🐞 BUG-DNA-001: [Character/State Machine] "Truffle and Filbert" ultimate mount state fails to reset upon dungeon exit, breaking open-world locomotion
 
-1. Severity & Priority
+**Reporter:** [Connor Wei]
+**Date:** 2026-06-21 (Updated: 2026-06-22)
+**Environment/Version:** Duet Night Abyss (Current Live/Beta Build)
+**Module:** Character State Machine / Locomotion / Scene Transition
 
-Severity: High - Critically breaks core player movement mechanics, requiring a game restart or scene reload to fix.
+### 1. Severity & Priority
+* **Severity:** High - Critically breaks core player movement mechanics, requiring a game restart or scene reload to fix.
+* **Priority:** P2
 
-Priority: P2
+### 2. Pre-conditions
+* Player is in the weekly dungeon: The Eclosioner (Lv. 50 tier).
+* Character Truffle and Filbert (Lv. 50) is in the active party.
+* Ultimate ability (Riding/Mount State) is ready to use.
 
-2. Pre-conditions
+### 3. Steps to Reproduce
+1. Enter The Eclosioner weekly dungeon.
+2. Progress to the end of the dungeon. Ensure no other team members are actively summoned on the field (Play solo).
+3. Activate Truffle and Filbert's Ultimate ability to enter the "Riding" state.
+4. While the Ultimate state is still actively ticking, trigger the dungeon completion and exit the instance back to the open world/hub.
+5. Upon loading into the open world, attempt to move using `WASD`.
+6. Attempt to use Dash and Attack inputs.
 
-Player is in the weekly dungeon: The Eclosioner (Lv. 50 tier).
-
-Character Truffle and Filbert (Lv. 50) is in the active party.
-
-Ultimate ability (Riding/Mount State) is ready to use.
-
-3. Steps to Reproduce
-
-Enter The Eclosioner weekly dungeon.
-
-Progress to the end of the dungeon. Ensure no other team members are actively summoned on the field (Play solo).
-
-Activate Truffle and Filbert's Ultimate ability to enter the "Riding" state.
-
-While the Ultimate state is still actively ticking, trigger the dungeon completion and exit the instance back to the open world/hub.
-
-Upon loading into the open world, attempt to move using WASD.
-
-Attempt to use Dash and Attack inputs.
-
-4. Actual Result
-
+### 4. Actual Result
 The character's locomotion state becomes permanently corrupted:
+* **WASD Movement:** Completely locked. Pressing `WASD` causes the character model to jitter/tremble, occasionally playing a slowed walking animation in place, but resulting in zero actual displacement. Character can still rotate.
+* **Dash & Attack Displacement:** Dash input works but is massively amplified, resulting in extreme travel distance and speed. Melee attacks that include forward momentum are similarly amplified.
+* **Jump:** Functions normally without amplification.
+* **Workaround:** The bug persists until the player completely restarts the client or enters a new dungeon instance to force a state refresh.
 
-WASD Movement: Completely locked. Pressing WASD causes the character model to jitter/tremble, occasionally playing a slowed walking animation in place, but resulting in zero actual displacement. Character can still rotate.
+### 5. Expected Result
+Upon transitioning out of a dungeon instance, a global `StateReset()` function should trigger, stripping the character of all active buffs, debuffs, and Ultimate states (including Truffle and Filbert's mount state). The player should load into the open world with default WASD locomotion parameters and standard Dash multipliers.
 
-Dash & Attack Displacement: Dash input works but is massively amplified, resulting in extreme travel distance and speed. Melee attacks that include forward momentum are similarly amplified.
-
-Jump: Functions normally without amplification.
-
-Workaround: The bug persists until the player completely restarts the client or enters a new dungeon instance to force a state refresh.
-
-5. Expected Result
-
-Upon transitioning out of a dungeon instance, a global StateReset() function should trigger, stripping the character of all active buffs, debuffs, and Ultimate states (including Truffle and Filbert's mount state). The player should load into the open world with default WASD locomotion parameters and standard Dash multipliers.
-
-6. Investigation Notes & Root Cause Hypothesis
-
-QA Analysis & Root Cause Hypothesis:
+### 6. Investigation Notes & Root Cause Hypothesis
+**QA Analysis & Root Cause Hypothesis:**
 This is a classic State Machine Exit-Node Failure caused by a scene transition interrupting an active ability.
+* When Truffle and Filbert uses the Ultimate, the game likely applies a high-value Speed Multiplier to the physics component and swaps the default WASD locomotion script for a "Mount/Vehicle" locomotion script.
+* Because the dungeon exit forces a loading screen, the Ultimate's `OnEnd()` or `OnDisable()` cleanup function is skipped or terminated abruptly.
+* **Result:** The "Mount" entity is destroyed (causing WASD to fail because it has no mount to drive), but the massive Speed Multiplier buff remains cached on the player's Rigidbody/CharacterController (causing Dash and Attack physical impulses to be multiplied exponentially).
 
-When Truffle and Filbert uses the Ultimate, the game likely applies a high-value Speed Multiplier to the physics component and swaps the default WASD locomotion script for a "Mount/Vehicle" locomotion script.
-
-Because the dungeon exit forces a loading screen, the Ultimate's OnEnd() or OnDisable() cleanup function is skipped or terminated abruptly.
-
-Result: The "Mount" entity is destroyed (causing WASD to fail because it has no mount to drive), but the massive Speed Multiplier buff remains cached on the player's Rigidbody/CharacterController (causing Dash and Attack physical impulses to be multiplied exponentially).
-
-Follow-up Testing Update (2026-06-22):
+**Follow-up Testing Update (2026-06-22):**
 Subsequent rigorous testing revealed a critical edge-case variable. If the player summons two other characters to the field inside the Lv. 50 dungeon before exiting, the bug is prevented. This strongly suggests that the presence of multiple active character entities forces a more thorough global state refresh, or that the team-despawn logic inadvertently triggers the missing cleanup function for the Ultimate state prior to the scene transition. I will be conducting further regression testing to isolate the exact trigger mechanism.
 
+---
 
-BUG-DNA-002: [Quest/UI] NPCs at "Fuxing Port" (浮星埠) fail to load UI nameplates and interaction colliders during story sequence
+## 🐞 BUG-DNA-002: [Quest/UI] NPCs at "Fuxing Port" (浮星埠) fail to load UI nameplates and interaction colliders during story sequence
 
-Reporter: [Connor Wei]
-Date: 2026-06-22
-Environment/Version: Duet Night Abyss (Current Live/Beta Build)
-Module: Quest System / UI / Streaming
+**Reporter:** [Connor Wei]
+**Date:** 2026-06-22
+**Environment/Version:** Duet Night Abyss (Current Live/Beta Build)
+**Module:** Quest System / UI / Streaming
 
-1. Severity & Priority
+### 1. Severity & Priority
+* **Severity:** Medium - Impairs narrative immersion and potentially soft-blocks quest progression if the player cannot interact with the required NPC.
+* **Priority:** P3
 
-Severity: Medium - Impairs narrative immersion and potentially soft-blocks quest progression if the player cannot interact with the required NPC.
+### 2. Pre-conditions
+* Player reaches the story milestone required to unlock/travel to the new area Fuxing Port (浮星埠).
+* Quest marker Pursue the Great Thief I (追击大盗 I) is active.
 
-Priority: P3
+### 3. Steps to Reproduce
+1. Follow the story objective to travel to Fuxing Port.
+2. Load into the new area.
+3. Approach the required story NPCs or ambient NPCs in the immediate vicinity.
+4. Observe the NPC models and attempt to interact.
 
-2. Pre-conditions
-
-Player reaches the story milestone required to unlock/travel to the new area Fuxing Port (浮星埠).
-
-Quest marker Pursue the Great Thief I (追击大盗 I) is active.
-
-3. Steps to Reproduce
-
-Follow the story objective to travel to Fuxing Port.
-
-Load into the new area.
-
-Approach the required story NPCs or ambient NPCs in the immediate vicinity.
-
-Observe the NPC models and attempt to interact.
-
-4. Actual Result
-
+### 4. Actual Result
 The 3D models of the NPCs load successfully, but their associated UI and interaction logic fail to initialize.
+* NPC overhead nameplates are completely missing.
+* No interaction prompt (e.g., "Press F to Talk") appears when standing within proximity.
+* Ambient dialogue text bubbles do not trigger.
+* The NPCs exist purely as static visual meshes.
 
-NPC overhead nameplates are completely missing.
-
-No interaction prompt (e.g., "Press F to Talk") appears when standing within proximity.
-
-Ambient dialogue text bubbles do not trigger.
-
-The NPCs exist purely as static visual meshes.
-
-5. Expected Result
-
+### 5. Expected Result
 The asynchronous scene loading manager should ensure that both the visual mesh and the underlying NPC data prefab (Nameplate UI, Dialogue Triggers, Interaction SphereColliders) are fully instantiated and bound before presenting the area to the player.
 
-6. Investigation Notes & Root Cause Hypothesis
-
-QA Analysis:
+### 6. Investigation Notes & Root Cause Hypothesis
+**QA Analysis:**
 This appears to be an Asynchronous Loading / Race Condition issue.
-
-In open-world games, visual meshes (graphics) and logic data (UI/Scripts) are often streamed separately to save memory.
-
-It is highly probable that the streaming volume for the Fuxing Port story state loaded the visual models, but the event listener responsible for binding the NPC's GUID to the dialogue database timed out or failed to trigger.
-
-Thus, the game knows "draw a character model here," but the character model doesn't know "who it is" or "what quest it belongs to," resulting in a lack of interaction colliders and UI elements.
+* In open-world games, visual meshes (graphics) and logic data (UI/Scripts) are often streamed separately to save memory.
+* It is highly probable that the streaming volume for the Fuxing Port story state loaded the visual models, but the event listener responsible for binding the NPC's GUID to the dialogue database timed out or failed to trigger.
+* **Thus:** The game knows "draw a character model here," but the character model doesn't know "who it is" or "what quest it belongs to," resulting in a lack of interaction colliders and UI elements.
